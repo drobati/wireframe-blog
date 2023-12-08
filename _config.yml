@@ -2,6 +2,7 @@ title: Hack the Planet
 email: derek@robati.com
 description: >-
   A blog about code, technology, and the web.
+domain: blog.robati.com
 baseurl: ""
 url: "blog.robati.com"
 author:
@@ -13,6 +14,15 @@ linkedin_username: drobati
 plugins:
   - jekyll-feed
 
+lsi: false
+safe: true
+source: .
+incremental: false
+highlighter: rouge
+gist:
+  noscript: false
 kramdown:
   input: GFM
   hard_wrap: false
+  math_engine: mathjax
+  syntax_highlighter: rouge
