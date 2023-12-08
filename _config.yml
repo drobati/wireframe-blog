@@ -1,0 +1,18 @@
+title: Hack the Planet
+email: derek@robati.com
+description: >-
+  A blog about code, technology, and the web.
+baseurl: ""
+url: "blog.robati.com"
+author:
+    name: Derek Robati
+twitter_username: robatidev
+github_username: drobati
+linkedin_username: drobati
+
+plugins:
+  - jekyll-feed
+
+kramdown:
+  input: GFM
+  hard_wrap: false

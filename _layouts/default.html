@@ -1,0 +1,126 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{{ page.title | default: site.title }}</title>
+    <link
+            href="https://fonts.googleapis.com/css?family=Gloria+Hallelujah&display=swap"
+            rel="stylesheet"
+    />
+    <link rel="stylesheet" href="{{ '/assets/css/styles.css' | relative_url }}">
+    <link href="https://fonts.googleapis.com/css?family=Material+Icons&display=block" rel="stylesheet">
+    <script src="https://unpkg.com/roughjs@latest/bundled/rough.js"></script>
+    <script type="module" src="https://unpkg.com/wired-elements?module"></script>
+    <link rel="stylesheet" href="https://unpkg.com/@highlightjs/cdn-assets@11.9.0/styles/default.min.css">
+    <script src="https://unpkg.com/@highlightjs/cdn-assets@11.9.0/highlight.min.js"></script>
+    <script>hljs.highlightAll();</script>
+</head>
+<body>
+<article>
+    <header>
+        <h1><a href="{{ '/' | relative_url }}">{{ page.title }}</a></h1>
+    </header>
+
+
+    <nav>
+        <wired-link href="{{ '/' | relative_url }}"
+                    name="blog"
+                    elevation="{% if page.url == '/' %}3{% else %}1{% endif %}">
+            Musings
+        </wired-link>
+        <wired-link href="{{ '/gallery/' | relative_url }}"
+                    name="gallery"
+                    elevation="{% if page.url contains '/gallery/' %}3{% else %}1{% endif %}">
+            Sketches
+        </wired-link>
+        <wired-link href="{{ '/about/' | relative_url }}"
+                    name="about"
+                    elevation="{% if page.url contains '/about/' %}3{% else %}1{% endif %}">
+            Story
+        </wired-link>
+    </nav>
+
+    <main>
+        {{ content }}
+    </main>
+
+    <footer>
+        <wired-divider elevation="1"></wired-divider>
+        <div class="footer-card">
+            <div class="social-icons">
+                <a href="https://github.com/{{ site.github_username }}" target="_blank" class="icon-link">
+                    <wired-icon-button>
+                        <div class="github-icon"></div>
+                    </wired-icon-button>
+                </a>
+                <a href="https://www.linkedin.com/in/{{ site.linkedin_username }}" target="_blank" class="icon-link">
+                    <wired-icon-button>
+                        <div class="linkedin-icon"></div>
+                    </wired-icon-button>
+                </a>
+            </div>
+            <div class="copyright">
+                © {{ site.author.name }} - {{ 'now' | date: '%Y' }}
+            </div>
+        </div>
+    </footer>
+</article>
+<script>
+    document.addEventListener('DOMContentLoaded', (event) => {
+        const svgs = document.getElementsByClassName('bullet')
+        for (let i = 0; i < svgs.length; i++) {
+            const svg = svgs[i];
+            const rc = rough.svg(svg);
+            svg.appendChild(rc.circle(10, 10, 8, {
+                fill: "rgb(0,0,0)",
+                fillStyle: "solid",
+            }));
+        }
+    });
+
+    document.addEventListener('DOMContentLoaded', (event) => {
+        const items = document.querySelectorAll('.post-item');
+
+        items.forEach(item => {
+            const canvas = document.createElement('canvas');
+            const rc = rough.canvas(canvas);
+
+            const bullet = item.querySelector('.bullet');
+            const link = item.querySelector('wired-link');
+            const date = item.querySelector('.post-date');
+
+            const bulletWidth = bullet.getBoundingClientRect().width + 10;
+            const linkWidth = link.getBoundingClientRect().width;
+            const dateWidth = date.getBoundingClientRect().width;
+
+            const height = item.getBoundingClientRect().height;
+
+            canvas.width = item.offsetWidth;
+            canvas.height = height; // Slightly more height for visibility
+
+            const padding = 15;
+            const x1 = bulletWidth + linkWidth + padding;
+            const x2 = canvas.width - dateWidth - padding;
+
+            const y = height - 15;
+
+            // Draw the line with Rough.js
+            rc.line(x1, y, x2, y, {
+                stroke: 'black',
+                strokeWidth: 1,
+                strokeLineDash: [10, 10],
+                roughness: 1.5,
+                bowing: 1,
+            });
+
+            // Convert the canvas to a data URL and set it as a background on the post-item
+            const dataURL = canvas.toDataURL('image/png');
+            item.style.backgroundImage = `url(${dataURL})`;
+            item.style.backgroundRepeat = 'no-repeat';
+            item.style.backgroundPosition = `left top`;
+        });
+    });
+</script>
+</body>
+</html>

@@ -1,0 +1,184 @@
+@font-face {
+    font-family: 'Gloria Hallelujah';
+    font-style: normal;
+    font-weight: 400;
+    font-display: fallback;
+    src: local('Gloria Hallelujah'), local('GloriaHallelujah');
+    unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+2000-206F, U+2074, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
+}
+
+body {
+    margin: 0;
+    font-family: 'Gloria Hallelujah', sans-serif;
+    font-size: 22px;
+    font-display: fallback;
+    letter-spacing: 0.05em;
+    line-height: 2;
+}
+
+nav {
+    display: flex;
+    justify-content: flex-start;
+    gap: 1.2rem;
+    align-items: center;
+    margin-bottom: 50px;
+}
+
+article {
+    padding: 15px 20px 40px;
+    max-width: 800px;
+    margin: 0 auto;
+}
+
+#logo {
+    float: left;
+    width: 100px;
+    height: 100px;
+    border-radius: 50%;
+    padding: 10px;
+    margin-right: 10px;
+}
+
+a,
+a:hover,
+a:visited {
+    color: inherit;
+    text-decoration: none;
+    outline: none;
+}
+
+a.textlink {
+    box-shadow: 0 -6px #f0e6f4 inset;
+}
+
+h1 {
+    font-size: 1.8em;
+}
+
+h2 {
+    font-size: 1.3em;
+    margin: 70px 0 0 0;
+}
+
+@media (max-width: 600px) {
+    body {
+        font-size: 19px;
+        letter-spacing: 0.05em;
+    }
+
+    article {
+        padding: 5px 16px 40px;
+    }
+}
+
+.post-list {
+    list-style-type: none; /* Remove default list styling */
+    padding-left: 0; /* Remove default padding */
+}
+
+.post-item {
+    display: flex;
+    align-items: center;
+    margin-bottom: 10px;
+}
+
+.bullet {
+    height: 20px;
+    width: 20px;
+    margin-right: 10px;
+}
+
+.post-date {
+    margin-left: auto; /* Align date to the right */
+}
+
+@media (max-width: 800px) {
+    .post-item {
+        flex-wrap: wrap;
+    }
+
+    .post-date {
+        margin-left: 0;
+        width: 100%; /* Take the full width on small screens */
+        order: 3; /* Ensure the date is below the title and bullet */
+    }
+
+    .bullet {
+        order: 1; /* Make sure bullet comes first */
+    }
+
+    wired-link {
+        order: 2; /* Title comes after the bullet */
+        flex-grow: 1; /* Allow the title to grow and fill available space */
+        text-overflow: ellipsis;
+        white-space: nowrap;
+        overflow: hidden;
+    }
+}
+
+wired-divider {
+    margin: 70px 0 30px 0;
+}
+
+.footer-card {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+
+.social-icons {
+    display: flex;
+    gap: 0.5rem;
+}
+
+.icon-link {
+    text-decoration: none;
+    color: inherit;
+}
+
+.github-icon {
+    background-image: url('data:image/svg+xml;charset=UTF-8,<svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 24 24"><g fill="none"><path d="M24 0v24H0V0h24ZM12.593 23.258l-.011.002l-.071.035l-.02.004l-.014-.004l-.071-.035c-.01-.004-.019-.001-.024.005l-.004.01l-.017.428l.005.02l.01.013l.104.074l.015.004l.012-.004l.104-.074l.012-.016l.004-.017l-.017-.427c-.002-.01-.009-.017-.017-.018Zm.265-.113l-.013.002l-.185.093l-.01.01l-.003.011l.018.43l.005.012l.008.007l.201.093c.012.004.023 0 .029-.008l.004-.014l-.034-.614c-.003-.012-.01-.02-.02-.022Zm-.715.002a.023.023 0 0 0-.027.006l-.006.014l-.034.614c0 .012.007.02.017.024l.015-.002l.201-.093l.01-.008l.004-.011l.017-.43l-.003-.012l-.01-.01l-.184-.092Z"/><path fill="currentColor" d="M6.315 6.176c-.25-.638-.24-1.367-.129-2.034a6.77 6.77 0 0 1 2.12 1.07c.28.214.647.283.989.18A9.343 9.343 0 0 1 12 5c.961 0 1.874.14 2.703.391c.342.104.709.034.988-.18a6.77 6.77 0 0 1 2.119-1.07c.111.667.12 1.396-.128 2.033c-.15.384-.075.826.208 1.14C18.614 8.117 19 9.04 19 10c0 2.114-1.97 4.187-5.134 4.818c-.792.158-1.101 1.155-.495 1.726c.389.366.629.882.629 1.456v3a1 1 0 0 0 2 0v-3c0-.57-.12-1.112-.334-1.603C18.683 15.35 21 12.993 21 10c0-1.347-.484-2.585-1.287-3.622c.21-.82.191-1.646.111-2.28c-.071-.568-.17-1.312-.57-1.756c-.595-.659-1.58-.271-2.28-.032a9.081 9.081 0 0 0-2.125 1.045A11.432 11.432 0 0 0 12 3c-.994 0-1.953.125-2.851.356a9.08 9.08 0 0 0-2.125-1.045c-.7-.24-1.686-.628-2.281.031c-.408.452-.493 1.137-.566 1.719l-.005.038c-.08.635-.098 1.462.112 2.283C3.484 7.418 3 8.654 3 10c0 2.992 2.317 5.35 5.334 6.397A3.986 3.986 0 0 0 8 17.98l-.168.034c-.717.099-1.176.01-1.488-.122c-.76-.322-1.152-1.133-1.63-1.753c-.298-.385-.732-.866-1.398-1.088a1 1 0 0 0-.632 1.898c.558.186.944 1.142 1.298 1.566c.373.448.869.916 1.58 1.218c.682.29 1.483.393 2.438.276V21a1 1 0 0 0 2 0v-3c0-.574.24-1.09.629-1.456c.607-.572.297-1.568-.495-1.726C6.969 14.187 5 12.114 5 10c0-.958.385-1.881 1.108-2.684c.283-.314.357-.756.207-1.14Z"/></g></svg>');
+    background-size: cover; /* or 'contain' depending on your needs */
+    display: block;
+    width: 32px;
+    height: 32px;
+}
+
+.linkedin-icon {
+    background-image: url('data:image/svg+xml;charset=UTF-8,<svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 24 24"><g fill="none"><path d="M24 0v24H0V0h24ZM12.593 23.258l-.011.002l-.071.035l-.02.004l-.014-.004l-.071-.035c-.01-.004-.019-.001-.024.005l-.004.01l-.017.428l.005.02l.01.013l.104.074l.015.004l.012-.004l.104-.074l.012-.016l.004-.017l-.017-.427c-.002-.01-.009-.017-.017-.018Zm.265-.113l-.013.002l-.185.093l-.01.01l-.003.011l.018.43l.005.012l.008.007l.201.093c.012.004.023 0 .029-.008l.004-.014l-.034-.614c-.003-.012-.01-.02-.02-.022Zm-.715.002a.023.023 0 0 0-.027.006l-.006.014l-.034.614c0 .012.007.02.017.024l.015-.002l.201-.093l.01-.008l.004-.011l.017-.43l-.003-.012l-.01-.01l-.184-.092Z"/><path fill="currentColor" d="M18 3a3 3 0 0 1 3 3v12a3 3 0 0 1-3 3H6a3 3 0 0 1-3-3V6a3 3 0 0 1 3-3h12Zm0 2H6a1 1 0 0 0-1 1v12a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1V6a1 1 0 0 0-1-1ZM8 10a1 1 0 0 1 .993.883L9 11v5a1 1 0 0 1-1.993.117L7 16v-5a1 1 0 0 1 1-1Zm3-1a1 1 0 0 1 .984.821a5.82 5.82 0 0 1 .623-.313c.667-.285 1.666-.442 2.568-.159c.473.15.948.43 1.3.907c.315.425.485.942.519 1.523L17 12v4a1 1 0 0 1-1.993.117L15 16v-4c0-.33-.08-.484-.132-.555a.548.548 0 0 0-.293-.188c-.348-.11-.849-.052-1.182.09c-.5.214-.958.55-1.27.861L12 12.34V16a1 1 0 0 1-1.993.117L10 16v-6a1 1 0 0 1 1-1ZM8 7a1 1 0 1 1 0 2a1 1 0 0 1 0-2Z"/></g></svg>');
+    background-size: cover;
+    display: block;
+    width: 32px;
+    height: 32px;
+}
+
+.copyright {
+    white-space: nowrap;
+}
+
+.code-card {
+    background: #f3f3f3;
+    width: 100%;
+}
+
+.code-card pre {
+    background: none;
+    border: none;
+    font-family: 'Fira Code', monospace;
+    font-size: 0.8em;
+    line-height: 1.2;
+    margin: 0;
+    padding: 20px;
+    white-space: pre-wrap;
+    word-break: break-word;
+}
+
+.shadowdom {
+    width: 100%;
+}
+
+.example {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
