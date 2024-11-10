@@ -40,6 +40,11 @@
                     elevation="{% if page.url contains '/about/' %}3{% else %}1{% endif %}">
             Story
         </wired-link>
+        <wired-link href="{{ '/bookshelf' | relative_url }}"
+                    name="bookshelf"
+                    elevation="{% if page.url contains '/bookshelf' %}3{% else %}1{% endif %}">
+            Bookshelf
+        </wired-link>
     </nav>
 
     <main>
@@ -122,6 +127,20 @@
             item.style.backgroundPosition = `left top`;
         });
     });
+</script>
+<script>
+    document.addEventListener('DOMContentLoaded', () => {
+        const books = document.querySelectorAll('.book');
+        books.forEach(book => {
+            book.style.setProperty('--book-color', getRandomColor());
+        });
+    });
+
+    function getRandomColor() {
+        // Define a list of colors that have good contrast with black text
+        const colors = ['#FFA07A', '#ADD8E6', '#90EE90', '#FFFACD', '#DDA0DD', '#E0FFFF', '#F08080'];
+        return colors[Math.floor(Math.random() * colors.length)];
+    }
 </script>
 </body>
 </html>

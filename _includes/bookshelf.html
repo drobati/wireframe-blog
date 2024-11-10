@@ -1,0 +1,170 @@
+<div class="bookshelf">
+  {% assign books_per_row = 15 %}
+  {% for book in site.data.books %}
+    {% assign row_position = forloop.index0 | modulo: books_per_row %}
+    {% if row_position == 0 %}
+      {% assign random_tilt = forloop.index0 | plus: 1 | plus: random_number | modulo: books_per_row %}
+    {% endif %}
+    
+    {% assign random_class = "book-darkgreen,book-green,book-blue,book-umber,book-springer,book-red,book-brightorange,book-lightblue" | split: "," | sample %}
+    
+    {% if row_position == random_tilt %}
+      <div class="book-tilted">
+        <div class="book {{ random_class }}">
+          <h2>{{ book.title }}</h2>
+          <h3>{{ book.author }}</h3>
+        </div>
+      </div>
+    {% else %}
+      <div class="book {{ random_class }}">
+        <h2>{{ book.title }}</h2>
+        <h3>{{ book.author }}</h3>
+      </div>
+    {% endif %}
+  {% endfor %}
+</div>
+
+<style>
+:root {
+  --brown: #A87328;
+  --darkblue: #0C347D;
+  --umber: #54290C;
+  --springer: #EDED80;
+  --red: #d34949;
+  --lightblue: #4A90E2;
+  --darkgreen: #006400;
+  --green: #4CAF50;
+  --brightorange: #ffd890;
+}
+
+.bookshelf {
+  font-size: 16px;
+  width: 100%;
+  height: 100%;
+  margin: 0 auto;
+  border: 10px var(--brown) solid;
+  overflow: hidden;
+  background-image: linear-gradient(#241909, #2c1e0b 220px, #b87e2c 220px, #b87e2c 222px, #A87328 222px, #A87328 228px, #986824 228px, #986824 230px);
+  background-size: 10px 230px;
+  /* box-shadow: 0px 1000px 0px 400px #7A7668; */
+}
+
+.book {
+  height: 200px;
+  width: 40px;
+  float: left;
+  color: white;
+  font-size: 0.9em;
+  font-family: Verdana, sans-serif;
+  margin-bottom: 10px;
+  margin-top: 20px;
+  transition: transform 0.4s ease;
+}
+
+.book-tilted {
+  float: left;
+  width: 74px;
+}
+
+.book-tilted > .book {
+  transform: translateY(-3px) translateX(15px) rotate(9deg) ;
+}
+
+.book:hover {
+  transform: scale(1.05);
+}
+
+.book h2 {
+  padding: 0;
+  font-size: 0.7em;
+  transform-origin: 0% 0%;
+  transform: rotate(0.25turn) translateY(-35px);
+  width: 170px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  margin-block-start: 0.83em;
+  margin-block-end: 0.83em;
+  margin-inline-start: 0px;
+  margin-inline-end: 0px;
+  letter-spacing: normal;
+  line-height: normal;
+}
+
+.book h3 {
+  padding: 0;
+  font-size: 0.5em;
+  transform-origin: 0 0;
+  transform: rotate(0.25turn) translateY(-15px) translateX(-20px);
+  width: 150px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  margin-block-start: 0.83em;
+  margin-block-end: 0.83em;
+  margin-inline-start: 0px;
+  margin-inline-end: 0px;
+  letter-spacing: normal;
+  line-height: normal;
+}
+
+.book-darkgreen {
+  background-color: var(--darkgreen);
+  border-left: 2px solid color-mix(in srgb, var(--darkgreen) 104%, white);
+  border-right: 2px solid color-mix(in srgb, var(--darkgreen) 96%, black);
+}
+
+.book-green {
+  background-color: var(--green);
+  border-left: 2px solid color-mix(in srgb, var(--green) 104%, white);
+  border-right: 2px solid color-mix(in srgb, var(--green) 96%, black);
+}
+
+.book-blue {
+  background-color: var(--darkblue);
+  border-left: 2px solid color-mix(in srgb, var(--darkblue) 104%, white);
+  border-right: 2px solid color-mix(in srgb, var(--darkblue) 96%, black);
+}
+
+.book-umber {
+  background-color: var(--umber);
+  border-left: 2px solid color-mix(in srgb, var(--umber) 104%, white);
+  border-right: 2px solid color-mix(in srgb, var(--umber) 96%, black);
+}
+
+.book-springer {
+  background-color: var(--springer);
+  border-left: 2px solid color-mix(in srgb, var(--springer) 104%, white);
+  border-right: 2px solid color-mix(in srgb, var(--springer) 96%, black);
+  color: black;
+}
+
+.book-red {
+  background-color: var(--red);
+  border-left: 2px solid color-mix(in srgb, var(--red) 104%, white);
+  border-right: 2px solid color-mix(in srgb, var(--red) 96%, black);
+}
+
+.book-lightblue {
+  background-color: var(--lightblue);
+  border-left: 2px solid color-mix(in srgb, var(--lightblue) 104%, white);
+  border-right: 2px solid color-mix(in srgb, var(--lightblue) 96%, black);
+}
+
+.book-brightorange {
+  background-color: var(--brightorange);
+  border-left: 2px solid color-mix(in srgb, var(--brightorange) 104%, white);
+  border-right: 2px solid color-mix(in srgb, var(--brightorange) 96%, black);
+  color: black
+}
+
+/* Responsive design for smaller screens */
+@media (max-width: 768px) {
+  .bookshelf {
+    flex-direction: column;
+  }
+  .book {
+    width: 100%; /* Full width on small screens */
+  }
+}
+</style>
