@@ -1,0 +1,534 @@
+<style>
+    #book-detail-overlay {
+        display: none;
+        position: fixed;
+        top: 0;
+        left: 0;
+        right: 0;
+        bottom: 0;
+        z-index: 200;
+        background: rgba(0, 0, 0, 0.4);
+        justify-content: center;
+        align-items: center;
+    }
+    #book-detail-overlay.active {
+        display: flex;
+    }
+    #book-detail-panel {
+        background: #fdf6e3;
+        border: 2px solid #333;
+        border-radius: 8px;
+        padding: 28px 32px;
+        max-width: 480px;
+        width: 90%;
+        max-height: 80vh;
+        overflow-y: auto;
+        font-family: 'Gloria Hallelujah', cursive;
+        position: relative;
+        box-shadow: 4px 4px 0 rgba(0,0,0,0.15);
+    }
+    #book-detail-panel .close-btn {
+        position: absolute;
+        top: 10px;
+        right: 14px;
+        font-size: 1.5em;
+        cursor: pointer;
+        background: none;
+        border: none;
+        font-family: inherit;
+        line-height: 1;
+    }
+    #book-detail-panel h2 {
+        margin: 0 0 4px 0;
+        font-size: 1.3em;
+        padding-right: 30px;
+    }
+    #book-detail-panel .author {
+        color: #666;
+        margin: 0 0 12px 0;
+        font-size: 0.95em;
+    }
+    #book-detail-panel .meta {
+        display: flex;
+        gap: 16px;
+        flex-wrap: wrap;
+        margin-bottom: 12px;
+        font-size: 0.85em;
+    }
+    #book-detail-panel .meta span {
+        background: rgba(0,0,0,0.06);
+        padding: 2px 8px;
+        border-radius: 4px;
+    }
+    #book-detail-panel .description {
+        font-size: 0.85em;
+        line-height: 1.5;
+        color: #444;
+    }
+    #scroll-hint {
+        position: fixed;
+        bottom: 24px;
+        left: 50%;
+        transform: translateX(-50%);
+        z-index: 100;
+        font-family: 'Gloria Hallelujah', cursive;
+        font-size: 0.85em;
+        color: rgba(80, 60, 30, 0.6);
+        pointer-events: none;
+        transition: opacity 0.5s;
+    }
+</style>
+
+<div id="book-detail-overlay">
+    <div id="book-detail-panel">
+        <button class="close-btn">&times;</button>
+        <h2 id="detail-title"></h2>
+        <p class="author" id="detail-author"></p>
+        <div class="meta">
+            <span id="detail-rating"></span>
+            <span id="detail-status"></span>
+        </div>
+        <div class="description" id="detail-description"></div>
+    </div>
+</div>
+
+<div id="scroll-hint">&#8592; scroll to browse &#8594;</div>
+
+<script type="module">
+import * as THREE from 'https://unpkg.com/three@0.170.0/build/three.module.js';
+
+// --- Constants ---
+const BOOK_COLORS = {
+    darkgreen:    0x006400,
+    green:        0x4CAF50,
+    darkblue:     0x0C347D,
+    umber:        0x54290C,
+    springer:     0xEDED80,
+    red:          0xd34949,
+    lightblue:    0x4A90E2,
+    brightorange: 0xffd890,
+};
+const COLOR_KEYS = Object.keys(BOOK_COLORS);
+const LIGHT_TEXT_COLORS = new Set(['springer', 'brightorange']); // these get dark text
+
+const BOOK_DEPTH = 0.8;
+const BOOK_GAP = 0.06;
+const SHELF_Y = -0.15;
+const SHELF_DEPTH = 1.2;
+const SHELF_THICKNESS = 0.15;
+const BACK_PANEL_HEIGHT = 3.5;
+
+const TILT_INTERVAL = 15;
+const TILT_ANGLE = 9 * (Math.PI / 180);
+
+// --- Setup renderer ---
+const canvas = document.getElementById('bookshelf-canvas');
+const renderer = new THREE.WebGLRenderer({ canvas, antialias: true });
+renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+renderer.setSize(window.innerWidth, window.innerHeight);
+renderer.outputColorSpace = THREE.SRGBColorSpace;
+
+// --- Scene ---
+const scene = new THREE.Scene();
+scene.background = new THREE.Color(0xf5e6c8);
+
+// --- Camera ---
+const camera = new THREE.PerspectiveCamera(50, window.innerWidth / window.innerHeight, 0.1, 200);
+camera.position.set(0, 1.25, 4.5);
+camera.lookAt(0, 1.25, 0);
+
+// --- Lights ---
+const ambient = new THREE.AmbientLight(0xfff5e0, 0.7);
+scene.add(ambient);
+const dirLight = new THREE.DirectionalLight(0xffffff, 1.0);
+dirLight.position.set(4, 6, 3);
+scene.add(dirLight);
+
+// --- Helpers ---
+function hashCode(str) {
+    let hash = 0;
+    for (let i = 0; i < str.length; i++) {
+        hash = ((hash << 5) - hash) + str.charCodeAt(i);
+        hash |= 0;
+    }
+    return Math.abs(hash);
+}
+
+function seededRandom(seed) {
+    let s = seed;
+    return function() {
+        s = (s * 16807 + 0) % 2147483647;
+        return s / 2147483647;
+    };
+}
+
+// --- Build book data ---
+const books = typeof BOOKS !== 'undefined' ? BOOKS : [];
+const bookMeshes = [];
+let totalWidth = 0;
+
+// Pre-calculate positions and dimensions
+const bookData = books.map((book, i) => {
+    const rng = seededRandom(hashCode(book.title || `book${i}`));
+    const width = 0.15 + rng() * 0.30; // 0.15 to 0.45
+    const height = 2.0 + rng() * 0.8;  // 2.0 to 2.8
+    const colorKey = COLOR_KEYS[hashCode(book.title || `book${i}`) % COLOR_KEYS.length];
+    const isTilted = (i % TILT_INTERVAL === (TILT_INTERVAL - 1)) && i > 0;
+    const tiltExtra = isTilted ? 0.35 : 0;
+    return { book, width, height, colorKey, isTilted, tiltExtra, index: i };
+});
+
+// Calculate cumulative x positions
+const bookPositions = [];
+let x = 0;
+for (const bd of bookData) {
+    bookPositions.push(x + bd.width / 2 + bd.tiltExtra / 2);
+    x += bd.width + BOOK_GAP + bd.tiltExtra;
+}
+totalWidth = x;
+
+// --- Create spine text textures ---
+function createSpineTexture(title, author, height, colorKey) {
+    const canvasEl = document.createElement('canvas');
+    const texH = 512;
+    const texW = 64;
+    canvasEl.width = texW;
+    canvasEl.height = texH;
+    const ctx = canvasEl.getContext('2d');
+
+    // Fill background with book color
+    const hexColor = '#' + BOOK_COLORS[colorKey].toString(16).padStart(6, '0');
+    ctx.fillStyle = hexColor;
+    ctx.fillRect(0, 0, texW, texH);
+
+    // Add subtle border shading
+    ctx.fillStyle = 'rgba(255,255,255,0.1)';
+    ctx.fillRect(0, 0, 3, texH);
+    ctx.fillStyle = 'rgba(0,0,0,0.15)';
+    ctx.fillRect(texW - 3, 0, 3, texH);
+
+    // Text
+    const textColor = LIGHT_TEXT_COLORS.has(colorKey) ? '#222' : '#fff';
+    ctx.fillStyle = textColor;
+
+    ctx.save();
+    ctx.translate(texW / 2, texH - 20);
+    ctx.rotate(-Math.PI / 2);
+
+    // Title
+    ctx.font = 'bold 18px "Courier New", monospace';
+    ctx.textBaseline = 'middle';
+    const maxTextWidth = texH - 80;
+    let displayTitle = title || 'Untitled';
+    let measured = ctx.measureText(displayTitle);
+    if (measured.width > maxTextWidth) {
+        while (ctx.measureText(displayTitle + '...').width > maxTextWidth && displayTitle.length > 0) {
+            displayTitle = displayTitle.slice(0, -1);
+        }
+        displayTitle += '...';
+    }
+    ctx.fillText(displayTitle, 0, -6);
+
+    // Author (smaller)
+    ctx.font = '13px "Courier New", monospace';
+    ctx.fillStyle = LIGHT_TEXT_COLORS.has(colorKey) ? 'rgba(0,0,0,0.6)' : 'rgba(255,255,255,0.7)';
+    let displayAuthor = author || '';
+    measured = ctx.measureText(displayAuthor);
+    if (measured.width > maxTextWidth) {
+        while (ctx.measureText(displayAuthor + '...').width > maxTextWidth && displayAuthor.length > 0) {
+            displayAuthor = displayAuthor.slice(0, -1);
+        }
+        displayAuthor += '...';
+    }
+    ctx.fillText(displayAuthor, 0, 12);
+
+    ctx.restore();
+
+    const texture = new THREE.CanvasTexture(canvasEl);
+    texture.colorSpace = THREE.SRGBColorSpace;
+    return texture;
+}
+
+// --- Create book meshes ---
+for (let i = 0; i < bookData.length; i++) {
+    const bd = bookData[i];
+    const geom = new THREE.BoxGeometry(bd.width, bd.height, BOOK_DEPTH);
+    const color = BOOK_COLORS[bd.colorKey];
+
+    const spineTexture = createSpineTexture(bd.book.title, bd.book.author, bd.height, bd.colorKey);
+
+    // Materials: [+x, -x, +y, -y, +z (front), -z (back/spine)]
+    const baseMat = new THREE.MeshStandardMaterial({ color, roughness: 0.75, metalness: 0.05 });
+    const spineMat = new THREE.MeshStandardMaterial({ map: spineTexture, roughness: 0.7, metalness: 0.05 });
+    const materials = [
+        baseMat, // right
+        baseMat, // left
+        baseMat, // top
+        baseMat, // bottom
+        spineMat, // front (facing camera = spine)
+        baseMat, // back
+    ];
+
+    const mesh = new THREE.Mesh(geom, materials);
+    const bx = bookPositions[i];
+    const by = SHELF_Y + SHELF_THICKNESS / 2 + bd.height / 2;
+    mesh.position.set(bx, by, 0);
+
+    if (bd.isTilted) {
+        mesh.rotation.z = TILT_ANGLE;
+        mesh.position.y -= 0.1;
+    }
+
+    mesh.userData = { bookIndex: i, originalScale: new THREE.Vector3(1, 1, 1) };
+    scene.add(mesh);
+    bookMeshes.push(mesh);
+}
+
+// --- Shelf ---
+const shelfGeom = new THREE.BoxGeometry(totalWidth + 4, SHELF_THICKNESS, SHELF_DEPTH);
+const shelfMat = new THREE.MeshStandardMaterial({ color: 0x8B5E3C, roughness: 0.85, metalness: 0.05 });
+const shelf = new THREE.Mesh(shelfGeom, shelfMat);
+shelf.position.set(totalWidth / 2, SHELF_Y, 0);
+scene.add(shelf);
+
+// --- Back panel ---
+const backGeom = new THREE.BoxGeometry(totalWidth + 4, BACK_PANEL_HEIGHT, 0.08);
+const backMat = new THREE.MeshStandardMaterial({ color: 0x5C3A1E, roughness: 0.9, metalness: 0.02 });
+const backPanel = new THREE.Mesh(backGeom, backMat);
+backPanel.position.set(totalWidth / 2, SHELF_Y + BACK_PANEL_HEIGHT / 2 - SHELF_THICKNESS, -SHELF_DEPTH / 2 + 0.04);
+scene.add(backPanel);
+
+// --- Scroll state ---
+let scrollOffset = 0;
+let scrollVelocity = 0;
+const FRICTION = 0.92;
+const SCROLL_SPEED = 0.003;
+let isDragging = false;
+let lastPointerX = 0;
+
+// Center camera initially on middle of shelf
+scrollOffset = totalWidth / 2;
+camera.position.x = scrollOffset;
+
+// --- Infinite wrapping ---
+function wrapBooks() {
+    const halfTotal = totalWidth / 2;
+    const viewCenter = camera.position.x;
+
+    for (let i = 0; i < bookMeshes.length; i++) {
+        const mesh = bookMeshes[i];
+        const baseX = bookPositions[i];
+
+        // Find closest wrapped position to camera
+        let wx = baseX;
+        while (wx - viewCenter > halfTotal) wx -= totalWidth;
+        while (wx - viewCenter < -halfTotal) wx += totalWidth;
+        mesh.position.x = wx;
+    }
+
+    // Also wrap shelf and back panel (make them very wide so gaps aren't visible)
+    shelf.position.x = viewCenter;
+    backPanel.position.x = viewCenter;
+}
+
+// --- Scroll events ---
+canvas.addEventListener('wheel', (e) => {
+    e.preventDefault();
+    // Use deltaY for vertical scroll → horizontal movement
+    scrollVelocity += e.deltaY * SCROLL_SPEED;
+}, { passive: false });
+
+// Touch support
+canvas.addEventListener('touchstart', (e) => {
+    isDragging = true;
+    lastPointerX = e.touches[0].clientX;
+    scrollVelocity = 0;
+}, { passive: true });
+
+canvas.addEventListener('touchmove', (e) => {
+    if (!isDragging) return;
+    e.preventDefault();
+    const x = e.touches[0].clientX;
+    const delta = lastPointerX - x;
+    scrollVelocity = delta * 0.02;
+    scrollOffset += delta * 0.015;
+    lastPointerX = x;
+}, { passive: false });
+
+canvas.addEventListener('touchend', () => {
+    isDragging = false;
+});
+
+// Mouse drag support
+canvas.addEventListener('mousedown', (e) => {
+    // Only start drag if not clicking a book (handled by click)
+    isDragging = true;
+    lastPointerX = e.clientX;
+    scrollVelocity = 0;
+});
+
+canvas.addEventListener('mousemove', (e) => {
+    if (!isDragging) return;
+    const x = e.clientX;
+    const delta = lastPointerX - x;
+    scrollVelocity = delta * 0.02;
+    scrollOffset += delta * 0.015;
+    lastPointerX = x;
+});
+
+canvas.addEventListener('mouseup', () => {
+    isDragging = false;
+});
+
+// --- Raycaster for hover/click ---
+const raycaster = new THREE.Raycaster();
+const mouse = new THREE.Vector2();
+let hoveredMesh = null;
+let mouseDownPos = new THREE.Vector2();
+
+canvas.addEventListener('mousemove', (e) => {
+    mouse.x = (e.clientX / window.innerWidth) * 2 - 1;
+    mouse.y = -(e.clientY / window.innerHeight) * 2 + 1;
+});
+
+canvas.addEventListener('mousedown', (e) => {
+    mouseDownPos.set(e.clientX, e.clientY);
+});
+
+canvas.addEventListener('click', (e) => {
+    // Ignore if it was a drag
+    const dist = Math.sqrt(
+        Math.pow(e.clientX - mouseDownPos.x, 2) +
+        Math.pow(e.clientY - mouseDownPos.y, 2)
+    );
+    if (dist > 5) return;
+
+    raycaster.setFromCamera(mouse, camera);
+    const intersects = raycaster.intersectObjects(bookMeshes);
+    if (intersects.length > 0) {
+        const mesh = intersects[0].object;
+        const bookIndex = mesh.userData.bookIndex;
+        showBookDetail(books[bookIndex]);
+    }
+});
+
+// --- Hover effect ---
+function updateHover() {
+    raycaster.setFromCamera(mouse, camera);
+    const intersects = raycaster.intersectObjects(bookMeshes);
+
+    if (hoveredMesh && (!intersects.length || intersects[0].object !== hoveredMesh)) {
+        // Un-hover
+        hoveredMesh.scale.copy(hoveredMesh.userData.originalScale);
+        hoveredMesh = null;
+        canvas.style.cursor = 'default';
+    }
+
+    if (intersects.length > 0 && !isDragging) {
+        const mesh = intersects[0].object;
+        if (mesh !== hoveredMesh) {
+            hoveredMesh = mesh;
+            mesh.scale.set(1.06, 1.06, 1.06);
+            canvas.style.cursor = 'pointer';
+        }
+    }
+}
+
+// --- Book detail panel ---
+const overlay = document.getElementById('book-detail-overlay');
+const detailTitle = document.getElementById('detail-title');
+const detailAuthor = document.getElementById('detail-author');
+const detailRating = document.getElementById('detail-rating');
+const detailStatus = document.getElementById('detail-status');
+const detailDescription = document.getElementById('detail-description');
+const closeBtn = overlay.querySelector('.close-btn');
+
+function showBookDetail(book) {
+    detailTitle.textContent = book.title || 'Untitled';
+    detailAuthor.textContent = book.author || 'Unknown Author';
+
+    const rating = parseFloat(book.rating_average);
+    detailRating.textContent = isNaN(rating) ? '' : `${'★'.repeat(Math.round(rating))}${'☆'.repeat(5 - Math.round(rating))} ${rating.toFixed(1)}`;
+    detailStatus.textContent = book.read_status || '';
+
+    // Strip HTML tags from description for clean display
+    const tmp = document.createElement('div');
+    tmp.innerHTML = book.description || book.summary || 'No description available.';
+    detailDescription.textContent = tmp.textContent;
+
+    overlay.classList.add('active');
+}
+
+function hideBookDetail() {
+    overlay.classList.remove('active');
+}
+
+closeBtn.addEventListener('click', (e) => {
+    e.stopPropagation();
+    hideBookDetail();
+});
+
+overlay.addEventListener('click', (e) => {
+    if (e.target === overlay) {
+        hideBookDetail();
+    }
+});
+
+document.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape') hideBookDetail();
+});
+
+// --- Scroll hint ---
+const scrollHint = document.getElementById('scroll-hint');
+let hintTimeout = setTimeout(() => {
+    if (scrollHint) scrollHint.style.opacity = '0';
+}, 4000);
+
+function onFirstScroll() {
+    if (scrollHint) scrollHint.style.opacity = '0';
+    canvas.removeEventListener('wheel', onFirstScroll);
+    canvas.removeEventListener('touchstart', onFirstScroll);
+}
+canvas.addEventListener('wheel', onFirstScroll);
+canvas.addEventListener('touchstart', onFirstScroll);
+
+// --- Resize ---
+window.addEventListener('resize', () => {
+    camera.aspect = window.innerWidth / window.innerHeight;
+    camera.updateProjectionMatrix();
+    renderer.setSize(window.innerWidth, window.innerHeight);
+    renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+});
+
+// --- Animate ---
+function animate() {
+    requestAnimationFrame(animate);
+
+    // Apply momentum
+    if (!isDragging) {
+        scrollOffset += scrollVelocity;
+        scrollVelocity *= FRICTION;
+        if (Math.abs(scrollVelocity) < 0.0001) scrollVelocity = 0;
+    }
+
+    camera.position.x = scrollOffset;
+    camera.lookAt(scrollOffset, 1.25, 0);
+
+    wrapBooks();
+    updateHover();
+
+    renderer.render(scene, camera);
+}
+
+// Wait for font to load before rendering textures
+document.fonts.ready.then(() => {
+    // Re-create textures with loaded font
+    for (let i = 0; i < bookData.length; i++) {
+        const bd = bookData[i];
+        const newTexture = createSpineTexture(bd.book.title, bd.book.author, bd.height, bd.colorKey);
+        bookMeshes[i].material[4].map = newTexture;
+        bookMeshes[i].material[4].needsUpdate = true;
+    }
+    animate();
+});
+</script>

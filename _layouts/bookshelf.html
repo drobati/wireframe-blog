@@ -1,0 +1,91 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{{ page.title | default: site.title }}</title>
+    <link
+            href="https://fonts.googleapis.com/css?family=Gloria+Hallelujah&display=swap"
+            rel="stylesheet"
+    />
+    <link rel="stylesheet" href="{{ '/assets/css/styles.css' | relative_url }}">
+    <link href="https://fonts.googleapis.com/css?family=Material+Icons&display=block" rel="stylesheet">
+    <script src="https://unpkg.com/roughjs@latest/bundled/rough.js"></script>
+    <script type="module" src="https://unpkg.com/wired-elements?module"></script>
+    <link rel="shortcut icon" type="image/x-icon" href="{{ '/assets/images/favicon.ico' | relative_url }}">
+    <style>
+        html, body {
+            margin: 0;
+            padding: 0;
+            width: 100%;
+            height: 100%;
+            overflow: hidden;
+            background: #f5e6c8;
+            font-size: 16px;
+            line-height: 1.4;
+        }
+        #bookshelf-canvas {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100vw;
+            height: 100vh;
+        }
+        #bookshelf-nav {
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            z-index: 100;
+            padding: 12px 20px;
+            margin-bottom: 0;
+            background: rgba(245, 230, 200, 0.75);
+            backdrop-filter: blur(10px);
+            -webkit-backdrop-filter: blur(10px);
+            font-family: 'Gloria Hallelujah', cursive;
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            flex-wrap: wrap;
+        }
+        #bookshelf-nav .nav-title {
+            font-size: 1.2em;
+            margin-right: 16px;
+            text-decoration: none;
+            color: inherit;
+        }
+        #bookshelf-nav wired-link {
+            font-size: 0.95em;
+        }
+    </style>
+</head>
+<body>
+    <nav id="bookshelf-nav">
+        <a class="nav-title" href="{{ '/' | relative_url }}">{{ site.title | default: "Blog" }}</a>
+        <wired-link href="{{ '/' | relative_url }}" name="blog"
+                    elevation="{% if page.url == '/' %}3{% else %}1{% endif %}">
+            Musings
+        </wired-link>
+        <wired-link href="{{ '/gallery/' | relative_url }}" name="gallery"
+                    elevation="{% if page.url contains '/gallery/' %}3{% else %}1{% endif %}">
+            Sketches
+        </wired-link>
+        <wired-link href="{{ '/about/' | relative_url }}" name="about"
+                    elevation="{% if page.url contains '/about/' %}3{% else %}1{% endif %}">
+            Story
+        </wired-link>
+        <wired-link href="{{ '/bookshelf' | relative_url }}" name="bookshelf"
+                    elevation="{% if page.url contains '/bookshelf' %}3{% else %}1{% endif %}">
+            Bookshelf
+        </wired-link>
+    </nav>
+
+    <canvas id="bookshelf-canvas"></canvas>
+
+    <script>
+        const BOOKS = {{ site.data.books | jsonify }};
+    </script>
+
+    {% include bookshelf_3d.html %}
+</body>
+</html>

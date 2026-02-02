@@ -1,6 +1,4 @@
 ---
-layout: default
+layout: bookshelf
 title: Bookshelf
 ---
-
-{% include bookshelf.html %}
