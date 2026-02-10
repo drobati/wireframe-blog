@@ -51,6 +51,11 @@
 
     <div class="napkin" style="--napkin-rotate: 0.4deg">
         <main>
+            {% if page.hero %}
+            <div class="hero-image">
+                <img src="{{ page.hero | relative_url }}" alt="{{ page.title }}">
+            </div>
+            {% endif %}
             {{ content }}
         </main>
     </div>

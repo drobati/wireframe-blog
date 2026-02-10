@@ -232,6 +232,20 @@ wired-image {
     white-space: nowrap;
 }
 
+/* === HERO IMAGE === */
+.hero-image {
+    margin: -10px -10px 30px -10px;
+    position: relative;
+}
+
+.hero-image img {
+    width: 100%;
+    display: block;
+    border: 2px solid #ccc;
+    box-shadow: 2px 3px 8px rgba(0,0,0,0.08);
+    transform: rotate(-0.3deg);
+}
+
 /* === CODE BLOCKS === */
 .code-card {
     background: rgba(0, 0, 0, 0.03);
