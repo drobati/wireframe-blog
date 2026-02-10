@@ -50,11 +50,6 @@
                         elevation="{% if page.url == '/' %}3{% else %}1{% endif %}">
                 Musings
             </wired-link>
-            <wired-link href="{{ '/gallery/' | relative_url }}"
-                        name="gallery"
-                        elevation="{% if page.url contains '/gallery/' %}3{% else %}1{% endif %}">
-                Sketches
-            </wired-link>
             <wired-link href="{{ '/about/' | relative_url }}"
                         name="about"
                         elevation="{% if page.url contains '/about/' %}3{% else %}1{% endif %}">
@@ -64,6 +59,16 @@
                         name="bookshelf"
                         elevation="{% if page.url contains '/bookshelf' %}3{% else %}1{% endif %}">
                 Bookshelf
+            </wired-link>
+            <wired-link href="https://robati.com/"
+                        name="resume"
+                        elevation="1">
+                Resume
+            </wired-link>
+            <wired-link href="https://orbitabuilt.com"
+                        name="company"
+                        elevation="1">
+                OrbitaBuilt
             </wired-link>
         </nav>
     </div>
@@ -166,6 +171,19 @@
             chunks.push(currentChunk);
         }
 
+        // Move orphaned trailing headings to the next chunk
+        for (let i = 0; i < chunks.length - 1; i++) {
+            while (chunks[i].length > 1) {
+                var last = chunks[i][chunks[i].length - 1];
+                if (/^H[1-6]$/.test(last.tagName)) {
+                    chunks[i].pop();
+                    chunks[i + 1].unshift(last);
+                } else {
+                    break;
+                }
+            }
+        }
+
         // Only chunk if we actually split into multiple pieces
         if (chunks.length < 2) return;
 
@@ -261,12 +279,13 @@
             });
         }
 
-        // TOC sidebar - auto-generate from h2 headings
-        var headings = main.querySelectorAll('h2');
+        // TOC sidebar - auto-generate from h2 and h3 headings
+        var headings = main.querySelectorAll('h2, h3');
         const toc = document.getElementById('toc-sidebar');
-        if (!toc || headings.length < 2) return;
+        if (!toc || main.querySelectorAll('h2').length < 2) return;
 
         const list = document.createElement('ul');
+        var currentSubList = null;
         headings.forEach((h, i) => {
             const id = 'section-' + i;
             h.id = id;
@@ -276,7 +295,16 @@
             a.textContent = h.textContent;
             a.dataset.target = id;
             li.appendChild(a);
-            list.appendChild(li);
+
+            if (h.tagName === 'H2') {
+                currentSubList = document.createElement('ul');
+                currentSubList.className = 'toc-sub';
+                li.appendChild(currentSubList);
+                list.appendChild(li);
+            } else if (h.tagName === 'H3' && currentSubList) {
+                li.className = 'toc-sub-item';
+                currentSubList.appendChild(li);
+            }
         });
         toc.appendChild(list);
         toc.classList.add('visible');

@@ -207,7 +207,7 @@ After generating both files:
 
 ### The AGENTS.md Template
 
-```markdown
+````markdown
 <!-- templates/AGENTS.md.template -->
 
 # AGENTS.md
@@ -272,11 +272,11 @@ a new test, any test utilities or helpers available.}
 {Non-obvious things an AI agent (or new developer) should know.
 Environment variables needed, build quirks, deployment requirements,
 files that should never be modified, etc.}
-```
+````
 
 ### The README Template
 
-```markdown
+````markdown
 <!-- templates/README.md.template -->
 
 # {Project Name}
@@ -332,7 +332,7 @@ snippets, or CLI commands.}
 ## License
 
 {License type, or "See LICENSE file for details."}
-```
+````
 
 ### Using It
 
