@@ -5,8 +5,8 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>{{ page.title | default: site.title }}</title>
     <link
-            href="https://fonts.googleapis.com/css?family=Gloria+Hallelujah&display=swap"
-            rel="stylesheet"
+        href="https://fonts.googleapis.com/css2?family=Caveat:wght@400;500;600;700&family=Permanent+Marker&display=swap"
+        rel="stylesheet"
     />
     <link rel="stylesheet" href="{{ '/assets/css/styles.css' | relative_url }}">
     <link href="https://fonts.googleapis.com/css?family=Material+Icons&display=block" rel="stylesheet">
@@ -15,63 +15,106 @@
     <link rel="stylesheet" href="https://unpkg.com/@highlightjs/cdn-assets@11.9.0/styles/default.min.css">
     <script src="https://unpkg.com/@highlightjs/cdn-assets@11.9.0/highlight.min.js"></script>
     <script>hljs.highlightAll();</script>
+    <link rel="icon" type="image/svg+xml" href="{{ '/assets/images/favicon.svg' | relative_url }}">
     <link rel="shortcut icon" type="image/x-icon" href="{{ '/assets/images/favicon.ico' | relative_url }}">
 </head>
 <body>
-<article>
-    <header>
-        <h1><a href="{{ '/' | relative_url }}">{{ page.title }}</a></h1>
-    </header>
+<article class="napkin-stack">
 
+    <div class="napkin" style="--napkin-rotate: -0.3deg">
+        <header>
+            <h1><a href="{{ '/' | relative_url }}">{{ page.title }}</a></h1>
+        </header>
+        <nav>
+            <wired-link href="{{ '/' | relative_url }}"
+                        name="blog"
+                        elevation="{% if page.url == '/' %}3{% else %}1{% endif %}">
+                Musings
+            </wired-link>
+            <wired-link href="{{ '/gallery/' | relative_url }}"
+                        name="gallery"
+                        elevation="{% if page.url contains '/gallery/' %}3{% else %}1{% endif %}">
+                Sketches
+            </wired-link>
+            <wired-link href="{{ '/about/' | relative_url }}"
+                        name="about"
+                        elevation="{% if page.url contains '/about/' %}3{% else %}1{% endif %}">
+                Story
+            </wired-link>
+            <wired-link href="{{ '/bookshelf' | relative_url }}"
+                        name="bookshelf"
+                        elevation="{% if page.url contains '/bookshelf' %}3{% else %}1{% endif %}">
+                Bookshelf
+            </wired-link>
+        </nav>
+    </div>
 
-    <nav>
-        <wired-link href="{{ '/' | relative_url }}"
-                    name="blog"
-                    elevation="{% if page.url == '/' %}3{% else %}1{% endif %}">
-            Musings
-        </wired-link>
-        <wired-link href="{{ '/gallery/' | relative_url }}"
-                    name="gallery"
-                    elevation="{% if page.url contains '/gallery/' %}3{% else %}1{% endif %}">
-            Sketches
-        </wired-link>
-        <wired-link href="{{ '/about/' | relative_url }}"
-                    name="about"
-                    elevation="{% if page.url contains '/about/' %}3{% else %}1{% endif %}">
-            Story
-        </wired-link>
-        <wired-link href="{{ '/bookshelf' | relative_url }}"
-                    name="bookshelf"
-                    elevation="{% if page.url contains '/bookshelf' %}3{% else %}1{% endif %}">
-            Bookshelf
-        </wired-link>
-    </nav>
+    <div class="napkin" style="--napkin-rotate: 0.4deg">
+        <main>
+            {{ content }}
+        </main>
+    </div>
 
-    <main>
-        {{ content }}
-    </main>
-
-    <footer>
-        <wired-divider elevation="1"></wired-divider>
-        <div class="footer-card">
-            <div class="social-icons">
-                <a href="https://github.com/{{ site.github_username }}" target="_blank" class="icon-link">
-                    <wired-icon-button>
-                        <div class="github-icon"></div>
-                    </wired-icon-button>
-                </a>
-                <a href="https://www.linkedin.com/in/{{ site.linkedin_username }}" target="_blank" class="icon-link">
-                    <wired-icon-button>
-                        <div class="linkedin-icon"></div>
-                    </wired-icon-button>
-                </a>
+    <div class="napkin" style="--napkin-rotate: -0.2deg">
+        <footer>
+            <div class="footer-card">
+                <div class="social-icons">
+                    <a href="https://github.com/{{ site.github_username }}" target="_blank" class="icon-link">
+                        <wired-icon-button>
+                            <div class="github-icon"></div>
+                        </wired-icon-button>
+                    </a>
+                    <a href="https://www.linkedin.com/in/{{ site.linkedin_username }}" target="_blank" class="icon-link">
+                        <wired-icon-button>
+                            <div class="linkedin-icon"></div>
+                        </wired-icon-button>
+                    </a>
+                </div>
+                <div class="copyright">
+                    &copy; {{ site.author.name }} - {{ 'now' | date: '%Y' }}
+                </div>
             </div>
-            <div class="copyright">
-                © {{ site.author.name }} - {{ 'now' | date: '%Y' }}
-            </div>
-        </div>
-    </footer>
+        </footer>
+    </div>
+
 </article>
+
+<script>
+    // Draw hand-drawn borders on each napkin using Rough.js
+    function drawNapkinBorders() {
+        document.querySelectorAll('.napkin').forEach(napkin => {
+            // Remove old border if exists
+            const old = napkin.querySelector('.napkin-border');
+            if (old) old.remove();
+
+            const w = napkin.offsetWidth;
+            const h = napkin.offsetHeight;
+
+            const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+            svg.classList.add('napkin-border');
+            svg.setAttribute('viewBox', '0 0 ' + w + ' ' + h);
+            napkin.prepend(svg);
+
+            const rc = rough.svg(svg);
+            svg.appendChild(rc.rectangle(3, 3, w - 6, h - 6, {
+                stroke: '#888',
+                strokeWidth: 1.5,
+                roughness: 1.2,
+                bowing: 0.8,
+            }));
+        });
+    }
+
+    // Wait for web components + fonts to settle, then draw
+    setTimeout(drawNapkinBorders, 600);
+
+    let resizeTimer;
+    window.addEventListener('resize', () => {
+        clearTimeout(resizeTimer);
+        resizeTimer = setTimeout(drawNapkinBorders, 250);
+    });
+</script>
+
 <script>
     document.addEventListener('DOMContentLoaded', (event) => {
         const svgs = document.getElementsByClassName('bullet')
@@ -79,7 +122,7 @@
             const svg = svgs[i];
             const rc = rough.svg(svg);
             svg.appendChild(rc.circle(10, 10, 8, {
-                fill: "rgb(0,0,0)",
+                fill: "rgb(42,42,42)",
                 fillStyle: "solid",
             }));
         }
@@ -103,7 +146,7 @@
             const height = item.getBoundingClientRect().height;
 
             canvas.width = item.offsetWidth;
-            canvas.height = height; // Slightly more height for visibility
+            canvas.height = height;
 
             const padding = 15;
             const x1 = bulletWidth + linkWidth + padding;
@@ -111,16 +154,14 @@
 
             const y = height - 15;
 
-            // Draw the line with Rough.js
             rc.line(x1, y, x2, y, {
-                stroke: 'black',
+                stroke: '#888',
                 strokeWidth: 1,
                 strokeLineDash: [10, 10],
                 roughness: 1.5,
                 bowing: 1,
             });
 
-            // Convert the canvas to a data URL and set it as a background on the post-item
             const dataURL = canvas.toDataURL('image/png');
             item.style.backgroundImage = `url(${dataURL})`;
             item.style.backgroundRepeat = 'no-repeat';
@@ -137,7 +178,6 @@
     });
 
     function getRandomColor() {
-        // Define a list of colors that have good contrast with black text
         const colors = ['#FFA07A', '#ADD8E6', '#90EE90', '#FFFACD', '#DDA0DD', '#E0FFFF', '#F08080'];
         return colors[Math.floor(Math.random() * colors.length)];
     }
