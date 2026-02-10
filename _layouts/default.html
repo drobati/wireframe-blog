@@ -19,11 +19,30 @@
     <link rel="shortcut icon" type="image/x-icon" href="{{ '/assets/images/favicon.ico' | relative_url }}">
 </head>
 <body>
+<aside class="toc-sidebar" id="toc-sidebar"></aside>
+
 <article class="napkin-stack">
 
     <div class="napkin" style="--napkin-rotate: -0.3deg">
         <header>
             <h1><a href="{{ '/' | relative_url }}">{{ page.title }}</a></h1>
+            {% if page.layout == 'default' and page.url contains '/' and page.title != site.title %}
+            <div class="post-meta">
+                {% if page.date %}<span class="post-meta-date">{{ page.date | date: "%b %-d, %Y" }}</span>{% endif %}
+                <span class="read-time" id="read-time"></span>
+                <button class="share-btn" id="share-btn" aria-label="Share this post">
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 12v8a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-8"/><polyline points="16 6 12 2 8 6"/><line x1="12" y1="2" x2="12" y2="15"/></svg>
+                    <span id="share-text">share</span>
+                </button>
+            </div>
+            {% if page.categories.size > 0 %}
+            <div class="post-labels">
+                {% for cat in page.categories %}
+                <span class="post-label">{{ cat }}</span>
+                {% endfor %}
+            </div>
+            {% endif %}
+            {% endif %}
         </header>
         <nav>
             <wired-link href="{{ '/' | relative_url }}"
@@ -85,13 +104,98 @@
 </article>
 
 <script>
-    // Draw hand-drawn borders on each napkin using Rough.js
-    function drawNapkinBorders() {
-        document.querySelectorAll('.napkin').forEach(napkin => {
-            // Remove old border if exists
-            const old = napkin.querySelector('.napkin-border');
-            if (old) old.remove();
+    // Randomize napkin rotations on all napkins
+    function randomizeNapkinRotations() {
+        document.querySelectorAll('.napkin').forEach((napkin, i) => {
+            // Alternate direction, vary the amount
+            var direction = (i % 2 === 0) ? -1 : 1;
+            // Add some randomness so not perfectly alternating
+            if (Math.random() < 0.3) direction *= -1;
+            var amount = 0.3 + Math.random() * 0.4; // 0.3 to 0.7 deg
+            var finalRotate = direction * amount;
+            napkin.style.setProperty('--napkin-rotate', finalRotate.toFixed(2) + 'deg');
 
+            // Dramatic start rotation (3-6deg, opposite direction for variety)
+            var startDir = (Math.random() < 0.5) ? -1 : 1;
+            var startAmount = 3 + Math.random() * 3;
+            napkin.style.setProperty('--napkin-start-rotate', (startDir * startAmount).toFixed(1) + 'deg');
+        });
+    }
+
+    // Split a tall content napkin into multiple square-ish napkins
+    function chunkContentNapkin() {
+        const MAX_HEIGHT = 800;
+        const main = document.querySelector('main');
+        if (!main) return;
+        const contentNapkin = main.closest('.napkin');
+        if (!contentNapkin || contentNapkin.offsetHeight <= MAX_HEIGHT) return;
+
+        const children = Array.from(main.children);
+        if (children.length < 2) return;
+
+        // Group children into chunks, splitting at h2 boundaries
+        const chunks = [];
+        let currentChunk = [];
+        let currentHeight = 0;
+
+        children.forEach(child => {
+            const childHeight = child.offsetHeight + parseInt(getComputedStyle(child).marginTop || 0) +
+                                parseInt(getComputedStyle(child).marginBottom || 0);
+            const isBreakpoint = child.tagName === 'H2';
+
+            // Start a new chunk at h2 if we're already past target height
+            if (isBreakpoint && currentHeight > MAX_HEIGHT * 0.5 && currentChunk.length > 0) {
+                chunks.push(currentChunk);
+                currentChunk = [];
+                currentHeight = 0;
+            }
+
+            currentChunk.push(child);
+            currentHeight += childHeight;
+
+            // Also split if we exceed max height and next natural break
+            if (currentHeight > MAX_HEIGHT && currentChunk.length > 1) {
+                // Don't split mid-chunk if the only item is this one
+                chunks.push(currentChunk);
+                currentChunk = [];
+                currentHeight = 0;
+            }
+        });
+
+        if (currentChunk.length > 0) {
+            chunks.push(currentChunk);
+        }
+
+        // Only chunk if we actually split into multiple pieces
+        if (chunks.length < 2) return;
+
+        const stack = contentNapkin.parentNode;
+        const rotations = [-0.2, 0.3, -0.15, 0.25, -0.3, 0.1, -0.25, 0.2, -0.1, 0.15];
+
+        chunks.forEach((chunk, i) => {
+            const napkin = document.createElement('div');
+            napkin.className = 'napkin napkin-chunk';
+            napkin.style.setProperty('--napkin-rotate', rotations[i % rotations.length] + 'deg');
+
+            const wrapper = document.createElement('div');
+            wrapper.className = 'napkin-content';
+            chunk.forEach(el => wrapper.appendChild(el));
+            napkin.appendChild(wrapper);
+
+            stack.insertBefore(napkin, contentNapkin);
+        });
+
+        contentNapkin.remove();
+    }
+
+    // Draw hand-drawn borders on each napkin using Rough.js
+    var napkinBordersEnabled = false;
+    function drawNapkinBorders() {
+        // Remove any existing borders
+        document.querySelectorAll('.napkin-border').forEach(el => el.remove());
+        if (!napkinBordersEnabled) return;
+
+        document.querySelectorAll('.napkin').forEach(napkin => {
             const w = napkin.offsetWidth;
             const h = napkin.offsetHeight;
 
@@ -110,8 +214,14 @@
         });
     }
 
-    // Wait for web components + fonts to settle, then draw
-    setTimeout(drawNapkinBorders, 600);
+    // Run chunking + rotation after DOM is ready (with delay for web components)
+    document.addEventListener('DOMContentLoaded', () => {
+        setTimeout(() => {
+            chunkContentNapkin();
+            randomizeNapkinRotations();
+            drawNapkinBorders();
+        }, 300);
+    });
 
     let resizeTimer;
     window.addEventListener('resize', () => {
@@ -121,6 +231,83 @@
 </script>
 
 <script>
+    // === TOC, READ TIME, SHARE (runs immediately - content is already in DOM above) ===
+    (function() {
+        var main = document.querySelector('main') || document.querySelector('.napkin-stack');
+        if (!main) return;
+
+        // Read time
+        var readTimeEl = document.getElementById('read-time');
+        if (readTimeEl) {
+            var words = main.textContent.trim().split(/\s+/).length;
+            var mins = Math.max(1, Math.round(words / 230));
+            readTimeEl.textContent = mins + ' min read';
+        }
+
+        // Share button
+        var shareBtn = document.getElementById('share-btn');
+        if (shareBtn) {
+            shareBtn.addEventListener('click', async () => {
+                var url = window.location.href;
+                var title = document.title;
+                if (navigator.share) {
+                    try { await navigator.share({ title, url }); } catch {}
+                } else {
+                    await navigator.clipboard.writeText(url);
+                    var txt = document.getElementById('share-text');
+                    txt.textContent = 'copied!';
+                    setTimeout(() => { txt.textContent = 'share'; }, 2000);
+                }
+            });
+        }
+
+        // TOC sidebar - auto-generate from h2 headings
+        var headings = main.querySelectorAll('h2');
+        const toc = document.getElementById('toc-sidebar');
+        if (!toc || headings.length < 2) return;
+
+        const list = document.createElement('ul');
+        headings.forEach((h, i) => {
+            const id = 'section-' + i;
+            h.id = id;
+            const li = document.createElement('li');
+            const a = document.createElement('a');
+            a.href = '#' + id;
+            a.textContent = h.textContent;
+            a.dataset.target = id;
+            li.appendChild(a);
+            list.appendChild(li);
+        });
+        toc.appendChild(list);
+        toc.classList.add('visible');
+
+        // Highlight active TOC item on scroll
+        const tocLinks = toc.querySelectorAll('a');
+        const observer = new IntersectionObserver(entries => {
+            entries.forEach(entry => {
+                if (entry.isIntersecting) {
+                    tocLinks.forEach(l => l.classList.remove('active'));
+                    const link = toc.querySelector('a[data-target="' + entry.target.id + '"]');
+                    if (link) link.classList.add('active');
+                }
+            });
+        }, { rootMargin: '-80px 0px -70% 0px' });
+
+        headings.forEach(h => observer.observe(h));
+    })();
+
+    // Wrap bare <pre> blocks in wired-card to match old post style
+    document.addEventListener('DOMContentLoaded', () => {
+        document.querySelectorAll('pre').forEach(pre => {
+            if (pre.closest('.code-card')) return; // already wrapped
+            const card = document.createElement('wired-card');
+            card.setAttribute('elevation', '2');
+            card.classList.add('code-card');
+            pre.parentNode.insertBefore(card, pre);
+            card.appendChild(pre);
+        });
+    });
+
     document.addEventListener('DOMContentLoaded', (event) => {
         const svgs = document.getElementsByClassName('bullet')
         for (let i = 0; i < svgs.length; i++) {
