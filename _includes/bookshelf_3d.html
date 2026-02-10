@@ -23,7 +23,7 @@
         width: 90%;
         max-height: 80vh;
         overflow-y: auto;
-        font-family: 'Gloria Hallelujah', cursive;
+        font-family: 'DM Sans', sans-serif;
         position: relative;
         box-shadow: 4px 4px 0 rgba(0,0,0,0.15);
     }
@@ -71,7 +71,7 @@
         left: 50%;
         transform: translateX(-50%);
         z-index: 100;
-        font-family: 'Gloria Hallelujah', cursive;
+        font-family: 'DM Sans', sans-serif;
         font-size: 0.85em;
         color: rgba(80, 60, 30, 0.6);
         pointer-events: none;
@@ -123,22 +123,22 @@ const TILT_ANGLE = 9 * (Math.PI / 180);
 
 // --- Setup renderer ---
 const canvas = document.getElementById('bookshelf-canvas');
-const renderer = new THREE.WebGLRenderer({ canvas, antialias: true });
+const renderer = new THREE.WebGLRenderer({ canvas, antialias: true, alpha: true });
 renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
 renderer.setSize(window.innerWidth, window.innerHeight);
 renderer.outputColorSpace = THREE.SRGBColorSpace;
 
 // --- Scene ---
 const scene = new THREE.Scene();
-scene.background = new THREE.Color(0xf5e6c8);
+// No scene background — transparent canvas blends with page
 
 // --- Camera ---
 const camera = new THREE.PerspectiveCamera(50, window.innerWidth / window.innerHeight, 0.1, 200);
-camera.position.set(0, 1.25, 4.5);
+camera.position.set(0, 1.25, 4.0);
 camera.lookAt(0, 1.25, 0);
 
 // --- Lights ---
-const ambient = new THREE.AmbientLight(0xfff5e0, 0.7);
+const ambient = new THREE.AmbientLight(0xfff5e0, 0.9);
 scene.add(ambient);
 const dirLight = new THREE.DirectionalLight(0xffffff, 1.0);
 dirLight.position.set(4, 6, 3);
@@ -163,17 +163,79 @@ function seededRandom(seed) {
 }
 
 // --- Build book data ---
-const books = typeof BOOKS !== 'undefined' ? BOOKS : [];
+const rawBooks = typeof BOOKS !== 'undefined' ? BOOKS : [];
 const bookMeshes = [];
 let totalWidth = 0;
 
+// Sort by author, with series grouped together by sequence within each author
+const entries = rawBooks.map((b, i) => ({ book: b, origIndex: i }));
+
+// Group series and sort each group by sequence
+const seriesGroups = {};
+for (const entry of entries) {
+    const key = entry.book.series_name;
+    if (!key) continue;
+    if (!seriesGroups[key]) seriesGroups[key] = [];
+    seriesGroups[key].push(entry);
+}
+for (const group of Object.values(seriesGroups)) {
+    group.sort((a, b) => {
+        const sa = parseFloat(a.book.series_sequence) || 999;
+        const sb = parseFloat(b.book.series_sequence) || 999;
+        return sa - sb;
+    });
+}
+
+// Group all books by author
+const authorGroups = {};
+for (const entry of entries) {
+    const author = (entry.book.author || 'Unknown').trim();
+    if (!authorGroups[author]) authorGroups[author] = [];
+    authorGroups[author].push(entry);
+}
+
+// Within each author: series books (grouped + sequence-sorted) first, then standalones
+const sortedEntries = [];
+for (const author of Object.keys(authorGroups).sort()) {
+    const authorEntries = authorGroups[author];
+    // Emit series groups in order of first appearance within this author
+    const seenInAuthor = new Set();
+    const seriesForAuthor = [];
+    const standalone = [];
+    for (const entry of authorEntries) {
+        if (entry.book.series_name) {
+            if (!seenInAuthor.has(entry.book.series_name)) {
+                seenInAuthor.add(entry.book.series_name);
+                seriesForAuthor.push(...seriesGroups[entry.book.series_name]);
+            }
+        } else {
+            standalone.push(entry);
+        }
+    }
+    sortedEntries.push(...seriesForAuthor, ...standalone);
+}
+const books = sortedEntries.map(e => e.book);
+
+// Pre-compute series dimensions (shared width, height, color per series)
+const seriesDims = {};
+for (const [name] of Object.entries(seriesGroups)) {
+    const rng = seededRandom(hashCode(name));
+    seriesDims[name] = {
+        width: 0.20 + rng() * 0.20,  // 0.20 to 0.40
+        height: 2.2 + rng() * 0.5,   // 2.2 to 2.7
+        colorKey: COLOR_KEYS[hashCode(name) % COLOR_KEYS.length],
+    };
+}
+
 // Pre-calculate positions and dimensions
 const bookData = books.map((book, i) => {
+    const series = book.series_name ? seriesDims[book.series_name] : null;
     const rng = seededRandom(hashCode(book.title || `book${i}`));
-    const width = 0.15 + rng() * 0.30; // 0.15 to 0.45
-    const height = 2.0 + rng() * 0.8;  // 2.0 to 2.8
-    const colorKey = COLOR_KEYS[hashCode(book.title || `book${i}`) % COLOR_KEYS.length];
-    const isTilted = (i % TILT_INTERVAL === (TILT_INTERVAL - 1)) && i > 0;
+    const width = series ? series.width : 0.15 + rng() * 0.30;
+    const height = series ? series.height : 2.0 + rng() * 0.8;
+    const colorKey = series ? series.colorKey : COLOR_KEYS[hashCode(book.title || `book${i}`) % COLOR_KEYS.length];
+    // Don't tilt books that are part of a series (keeps groups uniform)
+    const isTilted = !series && (i % TILT_INTERVAL === (TILT_INTERVAL - 1)) && i > 0;
     const tiltExtra = isTilted ? 0.35 : 0;
     return { book, width, height, colorKey, isTilted, tiltExtra, index: i };
 });
@@ -187,11 +249,38 @@ for (const bd of bookData) {
 }
 totalWidth = x;
 
+// --- Shared noise tile (generated once, tiled onto spines/covers) ---
+const NOISE_TILE_SIZE = 64;
+const NOISE_TILE = document.createElement('canvas');
+NOISE_TILE.width = NOISE_TILE_SIZE;
+NOISE_TILE.height = NOISE_TILE_SIZE;
+const _nctx = NOISE_TILE.getContext('2d');
+const _ndata = _nctx.createImageData(NOISE_TILE_SIZE, NOISE_TILE_SIZE);
+const _nrng = seededRandom(42);
+for (let i = 0; i < _ndata.data.length; i += 4) {
+    const v = Math.floor(_nrng() * 255);
+    _ndata.data[i] = v;
+    _ndata.data[i + 1] = v;
+    _ndata.data[i + 2] = v;
+    _ndata.data[i + 3] = 22;
+}
+_nctx.putImageData(_ndata, 0, 0);
+
+function addNoise(ctx, x, y, w, h) {
+    ctx.save();
+    ctx.globalCompositeOperation = 'overlay';
+    const pat = ctx.createPattern(NOISE_TILE, 'repeat');
+    ctx.fillStyle = pat;
+    ctx.fillRect(x, y, w, h);
+    ctx.restore();
+}
+
 // --- Create spine text textures ---
 function createSpineTexture(title, author, height, colorKey) {
     const canvasEl = document.createElement('canvas');
-    const texH = 512;
-    const texW = 64;
+    const S = 5;
+    const texW = 64 * S;
+    const texH = 512 * S;
     canvasEl.width = texW;
     canvasEl.height = texH;
     const ctx = canvasEl.getContext('2d');
@@ -201,51 +290,136 @@ function createSpineTexture(title, author, height, colorKey) {
     ctx.fillStyle = hexColor;
     ctx.fillRect(0, 0, texW, texH);
 
-    // Add subtle border shading
-    ctx.fillStyle = 'rgba(255,255,255,0.1)';
-    ctx.fillRect(0, 0, 3, texH);
-    ctx.fillStyle = 'rgba(0,0,0,0.15)';
-    ctx.fillRect(texW - 3, 0, 3, texH);
+    // Binding noise texture
+    addNoise(ctx, 0, 0, texW, texH);
 
-    // Text
-    const textColor = LIGHT_TEXT_COLORS.has(colorKey) ? '#222' : '#fff';
-    ctx.fillStyle = textColor;
+    // Subtle edge shading for depth
+    ctx.fillStyle = 'rgba(255,255,255,0.13)';
+    ctx.fillRect(0, 0, 3 * S, texH);
+    ctx.fillStyle = 'rgba(0,0,0,0.2)';
+    ctx.fillRect(texW - 3 * S, 0, 3 * S, texH);
 
+    const isLight = LIGHT_TEXT_COLORS.has(colorKey);
+    const textColor = isLight ? '#1a1a1a' : '#ffffff';
+    const shadowColor = isLight ? 'rgba(255,255,255,0.5)' : 'rgba(0,0,0,0.45)';
+    const pad = 30 * S;
+
+    // --- Title (top-to-bottom, starting from top of spine) ---
     ctx.save();
-    ctx.translate(texW / 2, texH - 20);
-    ctx.rotate(-Math.PI / 2);
+    ctx.translate(texW / 2, pad);
+    ctx.rotate(Math.PI / 2);
 
-    // Title
-    ctx.font = 'bold 18px "Courier New", monospace';
+    const titleSize = 22 * S;
+    ctx.font = `700 ${titleSize}px "Outfit", sans-serif`;
+    ctx.textAlign = 'left';
     ctx.textBaseline = 'middle';
-    const maxTextWidth = texH - 80;
+
+    const authorBlockH = author ? 100 * S : 0;
+    const maxTitleWidth = texH - pad * 2 - authorBlockH;
+
     let displayTitle = title || 'Untitled';
-    let measured = ctx.measureText(displayTitle);
-    if (measured.width > maxTextWidth) {
-        while (ctx.measureText(displayTitle + '...').width > maxTextWidth && displayTitle.length > 0) {
+    if (ctx.measureText(displayTitle).width > maxTitleWidth) {
+        while (ctx.measureText(displayTitle + '...').width > maxTitleWidth && displayTitle.length > 0) {
             displayTitle = displayTitle.slice(0, -1);
         }
         displayTitle += '...';
     }
-    ctx.fillText(displayTitle, 0, -6);
 
-    // Author (smaller)
-    ctx.font = '13px "Courier New", monospace';
-    ctx.fillStyle = LIGHT_TEXT_COLORS.has(colorKey) ? 'rgba(0,0,0,0.6)' : 'rgba(255,255,255,0.7)';
-    let displayAuthor = author || '';
-    measured = ctx.measureText(displayAuthor);
-    if (measured.width > maxTextWidth) {
-        while (ctx.measureText(displayAuthor + '...').width > maxTextWidth && displayAuthor.length > 0) {
-            displayAuthor = displayAuthor.slice(0, -1);
-        }
-        displayAuthor += '...';
-    }
-    ctx.fillText(displayAuthor, 0, 12);
-
+    ctx.fillStyle = shadowColor;
+    ctx.fillText(displayTitle, 0, 2 * S);
+    ctx.fillStyle = textColor;
+    ctx.fillText(displayTitle, 0, 0);
     ctx.restore();
+
+    // --- Author (stacked words, each rotated 90° top-to-bottom, centered in bottom block) ---
+    if (author) {
+        let words = author.split(/\s+/);
+        if (words.length > 3) {
+            words = [words[0], words.slice(1).join(' ')];
+        }
+
+        const authorFontSize = 13 * S;
+        const lineW = authorFontSize * 1.3; // each word takes this much horizontal space
+        const blockW = words.length * lineW;
+        // Center the stacked block horizontally on the spine
+        const blockStartX = (texW - blockW) / 2 + lineW / 2;
+
+        // Measure max word width (which maps to vertical space after rotation)
+        ctx.font = `500 ${authorFontSize}px "Outfit", sans-serif`;
+        let maxWordPx = 0;
+        const displayWords = words.map(word => {
+            const maxW = authorBlockH - 20 * S;
+            if (ctx.measureText(word).width > maxW) {
+                while (ctx.measureText(word + '.').width > maxW && word.length > 1) {
+                    word = word.slice(0, -1);
+                }
+                word += '.';
+            }
+            maxWordPx = Math.max(maxWordPx, ctx.measureText(word).width);
+            return word;
+        });
+
+        // Position: bottom of spine, block anchored to bottom edge
+        const blockTopY = texH - pad - maxWordPx;
+
+        ctx.fillStyle = isLight ? 'rgba(0,0,0,0.5)' : 'rgba(255,255,255,0.6)';
+        for (let w = 0; w < displayWords.length; w++) {
+            ctx.save();
+            // Each word centered in its column, rotated to read top-to-bottom
+            ctx.translate(blockStartX + w * lineW, texH - pad);
+            ctx.rotate(Math.PI / 2);
+            ctx.font = `500 ${authorFontSize}px "Outfit", sans-serif`;
+            ctx.textAlign = 'right';
+            ctx.textBaseline = 'middle';
+            ctx.fillText(displayWords[w], 0, 0);
+            ctx.restore();
+        }
+    }
 
     const texture = new THREE.CanvasTexture(canvasEl);
     texture.colorSpace = THREE.SRGBColorSpace;
+    texture.minFilter = THREE.LinearFilter;
+    texture.magFilter = THREE.LinearFilter;
+    texture.generateMipmaps = false;
+    return texture;
+}
+
+// --- Create cover texture with binding bleed ---
+// bleedEdge: 'left' or 'right' — which edge gets the noise strip
+function createCoverTexture(colorKey, bleedEdge) {
+    const canvasEl = document.createElement('canvas');
+    const w = 256;
+    const h = 512;
+    canvasEl.width = w;
+    canvasEl.height = h;
+    const ctx = canvasEl.getContext('2d');
+
+    const hexColor = '#' + BOOK_COLORS[colorKey].toString(16).padStart(6, '0');
+    ctx.fillStyle = hexColor;
+    ctx.fillRect(0, 0, w, h);
+
+    // Noise strip on the binding edge (~10% of width), fading out
+    const bleedW = Math.round(w * 0.12);
+    const bleedX = bleedEdge === 'right' ? w - bleedW : 0;
+
+    // Draw noise at full strength on the edge, fading inward
+    for (let step = 0; step < bleedW; step++) {
+        const t = bleedEdge === 'right' ? step / bleedW : 1 - step / bleedW;
+        const alpha = (1 - t) * 0.6; // strongest at spine edge, fades to 0
+        ctx.save();
+        ctx.globalAlpha = alpha;
+        ctx.globalCompositeOperation = 'overlay';
+        const pat = ctx.createPattern(NOISE_TILE, 'repeat');
+        ctx.fillStyle = pat;
+        ctx.fillRect(bleedX + step, 0, 1, h);
+        ctx.restore();
+    }
+
+    const texture = new THREE.CanvasTexture(canvasEl);
+    texture.colorSpace = THREE.SRGBColorSpace;
+    texture.minFilter = THREE.LinearFilter;
+    texture.magFilter = THREE.LinearFilter;
+    texture.generateMipmaps = false;
     return texture;
 }
 
@@ -255,18 +429,26 @@ for (let i = 0; i < bookData.length; i++) {
     const geom = new THREE.BoxGeometry(bd.width, bd.height, BOOK_DEPTH);
     const color = BOOK_COLORS[bd.colorKey];
 
-    const spineTexture = createSpineTexture(bd.book.title, bd.book.author, bd.height, bd.colorKey);
+    const spineTexture = createSpineTexture(bd.book.binding_title || bd.book.title_short || bd.book.title, bd.book.author, bd.height, bd.colorKey);
 
-    // Materials: [+x, -x, +y, -y, +z (front), -z (back/spine)]
+    // Cover textures with binding bleed from spine edge
+    // +x face: spine is at u=1 (right edge), so bleed on right
+    // -x face: spine is at u=0 (left edge), so bleed on left
+    const rightCoverTex = createCoverTexture(bd.colorKey, 'right');
+    const leftCoverTex = createCoverTexture(bd.colorKey, 'left');
+
+    // Materials: [+x, -x, +y, -y, +z (front/spine), -z (back)]
     const baseMat = new THREE.MeshStandardMaterial({ color, roughness: 0.75, metalness: 0.05 });
-    const spineMat = new THREE.MeshStandardMaterial({ map: spineTexture, roughness: 0.7, metalness: 0.05 });
+    const spineMat = new THREE.MeshStandardMaterial({ map: spineTexture, roughness: 0.8, metalness: 0.03 });
+    const rightCoverMat = new THREE.MeshStandardMaterial({ map: rightCoverTex, roughness: 0.75, metalness: 0.05 });
+    const leftCoverMat = new THREE.MeshStandardMaterial({ map: leftCoverTex, roughness: 0.75, metalness: 0.05 });
     const materials = [
-        baseMat, // right
-        baseMat, // left
-        baseMat, // top
-        baseMat, // bottom
-        spineMat, // front (facing camera = spine)
-        baseMat, // back
+        rightCoverMat, // right (+x)
+        leftCoverMat,  // left (-x)
+        baseMat,       // top
+        baseMat,       // bottom
+        spineMat,      // front (facing camera = spine)
+        baseMat,       // back
     ];
 
     const mesh = new THREE.Mesh(geom, materials);
@@ -276,10 +458,12 @@ for (let i = 0; i < bookData.length; i++) {
 
     if (bd.isTilted) {
         mesh.rotation.z = TILT_ANGLE;
-        mesh.position.y -= 0.1;
+        // Raise book so the lowest corner still sits on the shelf surface
+        const dropFromTilt = (bd.width / 2) * Math.sin(TILT_ANGLE) - (bd.height / 2) * (1 - Math.cos(TILT_ANGLE));
+        mesh.position.y += dropFromTilt;
     }
 
-    mesh.userData = { bookIndex: i, originalScale: new THREE.Vector3(1, 1, 1) };
+    mesh.userData = { bookIndex: i, originalScale: new THREE.Vector3(1, 1, 1), baseY: mesh.position.y };
     scene.add(mesh);
     bookMeshes.push(mesh);
 }
@@ -291,12 +475,8 @@ const shelf = new THREE.Mesh(shelfGeom, shelfMat);
 shelf.position.set(totalWidth / 2, SHELF_Y, 0);
 scene.add(shelf);
 
-// --- Back panel ---
-const backGeom = new THREE.BoxGeometry(totalWidth + 4, BACK_PANEL_HEIGHT, 0.08);
-const backMat = new THREE.MeshStandardMaterial({ color: 0x5C3A1E, roughness: 0.9, metalness: 0.02 });
-const backPanel = new THREE.Mesh(backGeom, backMat);
-backPanel.position.set(totalWidth / 2, SHELF_Y + BACK_PANEL_HEIGHT / 2 - SHELF_THICKNESS, -SHELF_DEPTH / 2 + 0.04);
-scene.add(backPanel);
+// --- Back panel (removed — transparent canvas shows page background) ---
+const backPanel = { position: { x: 0 } }; // stub so wrapBooks() doesn't break
 
 // --- Scroll state ---
 let scrollOffset = 0;
@@ -334,8 +514,9 @@ function wrapBooks() {
 // --- Scroll events ---
 canvas.addEventListener('wheel', (e) => {
     e.preventDefault();
-    // Use deltaY for vertical scroll → horizontal movement
-    scrollVelocity += e.deltaY * SCROLL_SPEED;
+    // Support both vertical scroll (mouse wheel) and horizontal swipe (trackpad)
+    const delta = Math.abs(e.deltaX) > Math.abs(e.deltaY) ? e.deltaX : e.deltaY;
+    scrollVelocity += delta * SCROLL_SPEED;
 }, { passive: false });
 
 // Touch support
@@ -412,13 +593,19 @@ canvas.addEventListener('click', (e) => {
     }
 });
 
-// --- Hover effect ---
+// --- Hover effect (tilt book toward viewer) ---
+const HOVER_TILT = 12 * (Math.PI / 180); // tilt angle on X-axis
+const HOVER_LIFT = 0.15; // lift up so bottom clears shelf
+const HOVER_PULL = 0.4;  // pull toward camera
 function updateHover() {
     raycaster.setFromCamera(mouse, camera);
     const intersects = raycaster.intersectObjects(bookMeshes);
 
     if (hoveredMesh && (!intersects.length || intersects[0].object !== hoveredMesh)) {
-        // Un-hover
+        // Un-hover: restore rotation, position, scale
+        hoveredMesh.rotation.x = 0;
+        hoveredMesh.position.y = hoveredMesh.userData.baseY;
+        hoveredMesh.position.z = 0;
         hoveredMesh.scale.copy(hoveredMesh.userData.originalScale);
         hoveredMesh = null;
         canvas.style.cursor = 'default';
@@ -428,7 +615,10 @@ function updateHover() {
         const mesh = intersects[0].object;
         if (mesh !== hoveredMesh) {
             hoveredMesh = mesh;
-            mesh.scale.set(1.06, 1.06, 1.06);
+            // Tilt toward viewer, lift up to clear shelf, pull forward
+            mesh.rotation.x = -HOVER_TILT;
+            mesh.position.y = mesh.userData.baseY + HOVER_LIFT;
+            mesh.position.z = HOVER_PULL;
             canvas.style.cursor = 'pointer';
         }
     }
@@ -525,7 +715,7 @@ document.fonts.ready.then(() => {
     // Re-create textures with loaded font
     for (let i = 0; i < bookData.length; i++) {
         const bd = bookData[i];
-        const newTexture = createSpineTexture(bd.book.title, bd.book.author, bd.height, bd.colorKey);
+        const newTexture = createSpineTexture(bd.book.binding_title || bd.book.title_short || bd.book.title, bd.book.author, bd.height, bd.colorKey);
         bookMeshes[i].material[4].map = newTexture;
         bookMeshes[i].material[4].needsUpdate = true;
     }
