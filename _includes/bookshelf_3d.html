@@ -109,7 +109,12 @@ const BOOK_COLORS = {
     brightorange: 0xffd890,
 };
 const COLOR_KEYS = Object.keys(BOOK_COLORS);
-const LIGHT_TEXT_COLORS = new Set(['springer', 'brightorange']); // these get dark text
+function isLightColor(hexInt) {
+    const r = (hexInt >> 16) & 0xff;
+    const g = (hexInt >> 8) & 0xff;
+    const b = hexInt & 0xff;
+    return (0.299 * r + 0.587 * g + 0.114 * b) / 255 > 0.5;
+}
 
 const BOOK_DEPTH = 0.8;
 const BOOK_GAP = 0.06;
@@ -223,7 +228,6 @@ for (const [name] of Object.entries(seriesGroups)) {
     seriesDims[name] = {
         width: 0.20 + rng() * 0.20,  // 0.20 to 0.40
         height: 2.2 + rng() * 0.5,   // 2.2 to 2.7
-        colorKey: COLOR_KEYS[hashCode(name) % COLOR_KEYS.length],
     };
 }
 
@@ -233,11 +237,15 @@ const bookData = books.map((book, i) => {
     const rng = seededRandom(hashCode(book.title || `book${i}`));
     const width = series ? series.width : 0.15 + rng() * 0.30;
     const height = series ? series.height : 2.0 + rng() * 0.8;
-    const colorKey = series ? series.colorKey : COLOR_KEYS[hashCode(book.title || `book${i}`) % COLOR_KEYS.length];
+    const fallbackKey = COLOR_KEYS[hashCode(book.title || `book${i}`) % COLOR_KEYS.length];
+    const color = book.cover_color
+        ? parseInt(book.cover_color.replace('#', ''), 16)
+        : BOOK_COLORS[fallbackKey];
+    const isLight = isLightColor(color);
     // Don't tilt books that are part of a series (keeps groups uniform)
     const isTilted = !series && (i % TILT_INTERVAL === (TILT_INTERVAL - 1)) && i > 0;
     const tiltExtra = isTilted ? 0.35 : 0;
-    return { book, width, height, colorKey, isTilted, tiltExtra, index: i };
+    return { book, width, height, color, isLight, isTilted, tiltExtra, index: i };
 });
 
 // Calculate cumulative x positions
@@ -276,7 +284,7 @@ function addNoise(ctx, x, y, w, h) {
 }
 
 // --- Create spine text textures ---
-function createSpineTexture(title, author, height, colorKey) {
+function createSpineTexture(title, author, height, color, isLight) {
     const canvasEl = document.createElement('canvas');
     const S = 5;
     const texW = 64 * S;
@@ -286,7 +294,7 @@ function createSpineTexture(title, author, height, colorKey) {
     const ctx = canvasEl.getContext('2d');
 
     // Fill background with book color
-    const hexColor = '#' + BOOK_COLORS[colorKey].toString(16).padStart(6, '0');
+    const hexColor = '#' + color.toString(16).padStart(6, '0');
     ctx.fillStyle = hexColor;
     ctx.fillRect(0, 0, texW, texH);
 
@@ -298,8 +306,6 @@ function createSpineTexture(title, author, height, colorKey) {
     ctx.fillRect(0, 0, 3 * S, texH);
     ctx.fillStyle = 'rgba(0,0,0,0.2)';
     ctx.fillRect(texW - 3 * S, 0, 3 * S, texH);
-
-    const isLight = LIGHT_TEXT_COLORS.has(colorKey);
     const textColor = isLight ? '#1a1a1a' : '#ffffff';
     const shadowColor = isLight ? 'rgba(255,255,255,0.5)' : 'rgba(0,0,0,0.45)';
     const pad = 30 * S;
@@ -386,7 +392,7 @@ function createSpineTexture(title, author, height, colorKey) {
 
 // --- Create cover texture with binding bleed ---
 // bleedEdge: 'left' or 'right' — which edge gets the noise strip
-function createCoverTexture(colorKey, bleedEdge) {
+function createCoverTexture(color, bleedEdge) {
     const canvasEl = document.createElement('canvas');
     const w = 256;
     const h = 512;
@@ -394,7 +400,7 @@ function createCoverTexture(colorKey, bleedEdge) {
     canvasEl.height = h;
     const ctx = canvasEl.getContext('2d');
 
-    const hexColor = '#' + BOOK_COLORS[colorKey].toString(16).padStart(6, '0');
+    const hexColor = '#' + color.toString(16).padStart(6, '0');
     ctx.fillStyle = hexColor;
     ctx.fillRect(0, 0, w, h);
 
@@ -423,22 +429,82 @@ function createCoverTexture(colorKey, bleedEdge) {
     return texture;
 }
 
+// --- Cover image cache & lazy loader ---
+const coverTextureCache = new Map();
+
+function createImageCoverTexture(image) {
+    const canvasEl = document.createElement('canvas');
+    const w = 256;
+    const h = 512;
+    canvasEl.width = w;
+    canvasEl.height = h;
+    const ctx = canvasEl.getContext('2d');
+
+    // Draw the cover image scaled to fill
+    ctx.drawImage(image, 0, 0, w, h);
+
+    // Re-apply binding noise bleed strip on spine edge (right 12%)
+    const bleedW = Math.round(w * 0.12);
+    const bleedX = w - bleedW;
+    for (let step = 0; step < bleedW; step++) {
+        const t = step / bleedW;
+        const alpha = (1 - t) * 0.6;
+        ctx.save();
+        ctx.globalAlpha = alpha;
+        ctx.globalCompositeOperation = 'overlay';
+        const pat = ctx.createPattern(NOISE_TILE, 'repeat');
+        ctx.fillStyle = pat;
+        ctx.fillRect(bleedX + step, 0, 1, h);
+        ctx.restore();
+    }
+
+    const texture = new THREE.CanvasTexture(canvasEl);
+    texture.colorSpace = THREE.SRGBColorSpace;
+    texture.minFilter = THREE.LinearFilter;
+    texture.magFilter = THREE.LinearFilter;
+    texture.generateMipmaps = false;
+    return texture;
+}
+
+function loadCoverImage(bookIndex) {
+    if (coverTextureCache.has(bookIndex)) return;
+    const bd = bookData[bookIndex];
+    const imageUrl = bd.book.image_url;
+    if (!imageUrl) return;
+
+    // Mark as loading to prevent duplicate requests
+    coverTextureCache.set(bookIndex, 'loading');
+
+    const img = new Image();
+    img.crossOrigin = 'anonymous';
+    img.onload = function() {
+        const texture = createImageCoverTexture(img);
+        coverTextureCache.set(bookIndex, texture);
+        // Apply to +x face (material index 0)
+        bookMeshes[bookIndex].material[0].map = texture;
+        bookMeshes[bookIndex].material[0].needsUpdate = true;
+    };
+    img.onerror = function() {
+        // CORS or 404 — silently keep existing colored cover
+        coverTextureCache.set(bookIndex, 'failed');
+    };
+    img.src = imageUrl;
+}
+
 // --- Create book meshes ---
 for (let i = 0; i < bookData.length; i++) {
     const bd = bookData[i];
     const geom = new THREE.BoxGeometry(bd.width, bd.height, BOOK_DEPTH);
-    const color = BOOK_COLORS[bd.colorKey];
-
-    const spineTexture = createSpineTexture(bd.book.binding_title || bd.book.title_short || bd.book.title, bd.book.author, bd.height, bd.colorKey);
+    const spineTexture = createSpineTexture(bd.book.binding_title || bd.book.title_short || bd.book.title, bd.book.author, bd.height, bd.color, bd.isLight);
 
     // Cover textures with binding bleed from spine edge
     // +x face: spine is at u=1 (right edge), so bleed on right
     // -x face: spine is at u=0 (left edge), so bleed on left
-    const rightCoverTex = createCoverTexture(bd.colorKey, 'right');
-    const leftCoverTex = createCoverTexture(bd.colorKey, 'left');
+    const rightCoverTex = createCoverTexture(bd.color, 'right');
+    const leftCoverTex = createCoverTexture(bd.color, 'left');
 
     // Materials: [+x, -x, +y, -y, +z (front/spine), -z (back)]
-    const baseMat = new THREE.MeshStandardMaterial({ color, roughness: 0.75, metalness: 0.05 });
+    const baseMat = new THREE.MeshStandardMaterial({ color: bd.color, roughness: 0.75, metalness: 0.05 });
     const spineMat = new THREE.MeshStandardMaterial({ map: spineTexture, roughness: 0.8, metalness: 0.03 });
     const rightCoverMat = new THREE.MeshStandardMaterial({ map: rightCoverTex, roughness: 0.75, metalness: 0.05 });
     const leftCoverMat = new THREE.MeshStandardMaterial({ map: leftCoverTex, roughness: 0.75, metalness: 0.05 });
@@ -690,6 +756,27 @@ window.addEventListener('resize', () => {
     renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
 });
 
+// --- Viewport-based cover image loading ---
+let lastLoadCheck = 0;
+const LOAD_CHECK_MS = 200;
+
+function loadVisibleCovers(now) {
+    if (now - lastLoadCheck < LOAD_CHECK_MS) return;
+    lastLoadCheck = now;
+
+    const camX = camera.position.x;
+    // Visible half-width at book plane (z=0), accounting for FOV and aspect ratio
+    const visibleHalf = Math.tan((camera.fov / 2) * Math.PI / 180) * camera.position.z * camera.aspect;
+
+    for (let i = 0; i < bookMeshes.length; i++) {
+        const dx = bookMeshes[i].position.x - camX;
+        // Load if on screen (left edge) or within right-side buffer (1 extra screen width)
+        if (dx >= -visibleHalf && dx <= visibleHalf * 2) {
+            loadCoverImage(i);
+        }
+    }
+}
+
 // --- Animate ---
 function animate() {
     requestAnimationFrame(animate);
@@ -705,6 +792,7 @@ function animate() {
     camera.lookAt(scrollOffset, 1.25, 0);
 
     wrapBooks();
+    loadVisibleCovers(performance.now());
     updateHover();
 
     renderer.render(scene, camera);
@@ -715,7 +803,7 @@ document.fonts.ready.then(() => {
     // Re-create textures with loaded font
     for (let i = 0; i < bookData.length; i++) {
         const bd = bookData[i];
-        const newTexture = createSpineTexture(bd.book.binding_title || bd.book.title_short || bd.book.title, bd.book.author, bd.height, bd.colorKey);
+        const newTexture = createSpineTexture(bd.book.binding_title || bd.book.title_short || bd.book.title, bd.book.author, bd.height, bd.color, bd.isLight);
         bookMeshes[i].material[4].map = newTexture;
         bookMeshes[i].material[4].needsUpdate = true;
     }
